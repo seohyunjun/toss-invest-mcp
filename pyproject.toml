@@ -28,6 +28,7 @@ py-modules = ["toss_invest", "toss_mcp_server"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"
 
 [tool.ruff]

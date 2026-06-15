@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "toss-invest-mcp"
+version = "1.0.0"
+description = "토스증권 Open API용 비공식 Python 클라이언트 + MCP 서버"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "seohyunjun", email = "bnmy6581@gmail.com" }]
+keywords = ["toss", "tossinvest", "mcp", "trading", "stock", "openapi"]
+dependencies = [
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "mcp[cli]>=1.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+toss-mcp-server = "toss_mcp_server:main"
+
+[tool.setuptools]
+py-modules = ["toss_invest", "toss_mcp_server"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

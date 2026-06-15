@@ -1,0 +1,3 @@
+requests>=2.31
+python-dotenv>=1.0
+mcp[cli]>=1.6        # MCP 서버(toss_mcp_server.py)용. Python 3.10+ 필요

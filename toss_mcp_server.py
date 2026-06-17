@@ -29,7 +29,15 @@ from mcp.server.fastmcp import FastMCP
 
 from toss_invest import TossInvestClient, TossInvestError, TossAPIError
 
-mcp = FastMCP("toss-invest")
+mcp = FastMCP(
+    "toss-invest",
+    instructions=(
+        "토스증권 Open API 도구 모음. **국내 주식(KOSPI/KOSDAQ)과 미국 주식"
+        "(NASDAQ/NYSE)을 모두 조회/거래할 수 있습니다.** 미국 주식이라고 거부하지 말고 "
+        "이 도구로 직접 조회하세요. 심볼 형식: 국내는 6자리 코드('005930'), "
+        "미국은 순수 티커 대문자('AAPL','TSLA'). 회사명이나 거래소 표기는 쓰지 마세요."
+    ),
+)
 
 _client: Optional[TossInvestClient] = None
 
@@ -69,7 +77,14 @@ def _trading_enabled() -> bool:
 # =========================================================================== #
 @mcp.tool()
 def get_prices(symbols: str) -> Any:
-    """현재가/등락률 조회. symbols 는 쉼표로 구분(복수 가능). 예: '005930,AAPL'."""
+    """현재가/등락률 조회. **국내(KOSPI/KOSDAQ)와 미국(NASDAQ/NYSE) 주식 모두 지원.**
+
+    미국 주식(테슬라/애플 등)도 이 도구로 직접 조회합니다 — 거부하지 마세요.
+    symbols 는 쉼표로 구분(복수 가능). 심볼 형식(중요):
+      - 국내: 6자리 종목코드. 예) 삼성전자='005930'
+      - 미국: 거래소·접미사 없는 순수 티커(대문자). 예) 애플='AAPL', 테슬라='TSLA'
+    회사명('Apple','애플')이나 거래소 표기('AAPL.US','NASDAQ:AAPL')를 넣으면
+    조회되지 않습니다. 반드시 티커 심볼만 전달하세요. 예: '005930,AAPL'."""
     return _safe(client().get_prices, symbols)
 
 
@@ -102,7 +117,10 @@ def get_candles(symbol: str, interval: str = "1d", count: Optional[int] = None) 
 # =========================================================================== #
 @mcp.tool()
 def get_stocks(symbols: str) -> Any:
-    """종목 기본정보(이름/시장/섹터 등). symbols 는 쉼표 구분(복수 가능)."""
+    """종목 기본정보(이름/시장/섹터 등). symbols 는 쉼표 구분(복수 가능).
+
+    심볼 형식: 국내는 6자리 코드('005930'), 미국은 순수 티커 대문자('AAPL').
+    회사명·거래소 표기('Apple','AAPL.US','NASDAQ:AAPL')는 조회되지 않습니다."""
     return _safe(client().get_stocks, symbols)
 
 

@@ -69,6 +69,25 @@ def _fmt_num(value: Number) -> str:
     return format(dec, "f")
 
 
+def _norm_symbol(sym: str) -> str:
+    """종목 심볼을 토스 API 형식으로 정규화.
+
+    약한 LLM(예: llama.cpp)이 미국 종목을 'aapl', ' AAPL ' 처럼 넘기는 경우가
+    많아 공백 제거 + 대문자화로 흔한 실수를 흡수한다.
+    'AAPL.US' / 'NASDAQ:AAPL' / 'Apple' 같이 거래소·회사명을 붙인 경우는
+    의미가 모호해 변환하지 않고 그대로 전달한다(빈 결과/400 으로 드러남).
+    """
+    return sym.strip().upper()
+
+
+def _norm_symbols(symbols: Union[str, list[str]]) -> str:
+    """단일/복수 심볼을 정규화해 쉼표 결합 문자열로 반환."""
+    if isinstance(symbols, (list, tuple)):
+        return ",".join(_norm_symbol(s) for s in symbols)
+    # 쉼표 구분 문자열도 항목별로 정규화
+    return ",".join(_norm_symbol(s) for s in symbols.split(","))
+
+
 # --------------------------------------------------------------------------- #
 # 예외
 # --------------------------------------------------------------------------- #
@@ -293,22 +312,27 @@ class TossInvestClient:
     # ================================================================== #
     def get_prices(self, symbols: Union[str, list[str]], **kw: Any) -> Any:
         """현재가 조회. symbols: 'AAPL' 또는 ['005930','AAPL'] (복수 가능)."""
-        s = ",".join(symbols) if isinstance(symbols, (list, tuple)) else symbols
+        s = _norm_symbols(symbols)
         return self._request("GET", f"{self.API}/prices", params={"symbols": s}, **kw)
 
     def get_orderbook(self, symbol: str, **kw: Any) -> Any:
         """호가 조회."""
-        return self._request("GET", f"{self.API}/orderbook", params={"symbol": symbol}, **kw)
+        return self._request(
+            "GET", f"{self.API}/orderbook", params={"symbol": _norm_symbol(symbol)}, **kw
+        )
 
     def get_trades(self, symbol: str, count: Optional[int] = None, **kw: Any) -> Any:
         """최근 체결 내역."""
         return self._request(
-            "GET", f"{self.API}/trades", params={"symbol": symbol, "count": count}, **kw
+            "GET", f"{self.API}/trades",
+            params={"symbol": _norm_symbol(symbol), "count": count}, **kw,
         )
 
     def get_price_limits(self, symbol: str, **kw: Any) -> Any:
         """상/하한가 조회."""
-        return self._request("GET", f"{self.API}/price-limits", params={"symbol": symbol}, **kw)
+        return self._request(
+            "GET", f"{self.API}/price-limits", params={"symbol": _norm_symbol(symbol)}, **kw
+        )
 
     def get_candles(
         self,
@@ -324,7 +348,7 @@ class TossInvestClient:
             "GET",
             f"{self.API}/candles",
             params={
-                "symbol": symbol, "interval": interval,
+                "symbol": _norm_symbol(symbol), "interval": interval,
                 "count": count, "before": before, "adjusted": adjusted,
             },
             **kw,
@@ -335,12 +359,12 @@ class TossInvestClient:
     # ================================================================== #
     def get_stocks(self, symbols: Union[str, list[str]], **kw: Any) -> Any:
         """종목 기본 정보 (복수 가능)."""
-        s = ",".join(symbols) if isinstance(symbols, (list, tuple)) else symbols
+        s = _norm_symbols(symbols)
         return self._request("GET", f"{self.API}/stocks", params={"symbols": s}, **kw)
 
     def get_warnings(self, symbol: str, **kw: Any) -> Any:
         """매수 유의사항 조회."""
-        return self._request("GET", f"{self.API}/stocks/{symbol}/warnings", **kw)
+        return self._request("GET", f"{self.API}/stocks/{_norm_symbol(symbol)}/warnings", **kw)
 
     # ================================================================== #
     # Market Info
@@ -401,7 +425,7 @@ class TossInvestClient:
     ) -> Any:
         """판매 가능 수량."""
         return self._request(
-            "GET", f"{self.API}/sellable-quantity", params={"symbol": symbol},
+            "GET", f"{self.API}/sellable-quantity", params={"symbol": _norm_symbol(symbol)},
             account=account, use_account=True, **kw,
         )
 
@@ -475,7 +499,7 @@ class TossInvestClient:
             raise ValueError("quantity 또는 order_amount 중 하나는 필요합니다.")
 
         body: dict[str, Any] = {
-            "symbol": symbol,
+            "symbol": _norm_symbol(symbol),
             "side": side.upper(),
             "orderType": order_type.upper(),
         }

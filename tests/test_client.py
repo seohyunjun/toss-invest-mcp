@@ -13,6 +13,7 @@ from toss_invest import (
     TossInvestClient,
     TossInvestError,
     _fmt_num,
+    _norm_date,
 )
 
 
@@ -197,3 +198,81 @@ def test_place_order_requires_qty_or_amount(monkeypatch):
     c = _make_client(monkeypatch)
     with pytest.raises(ValueError):
         c.place_order("005930", "BUY", account=1)
+
+
+# --------------------------------------------------------------------------- #
+# 날짜 정규화 / get_daily_quote
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("2026-06-17", "2026-06-17"),
+        ("20260617", "2026-06-17"),
+        ("2026/06/17", "2026-06-17"),
+        ("2026.06.17", "2026-06-17"),
+        ("2026-06-17T13:00:00.000+09:00", "2026-06-17"),
+        (" 2026-06-17 ", "2026-06-17"),
+    ],
+)
+def test_norm_date(value, expected):
+    assert _norm_date(value) == expected
+
+
+def test_norm_date_invalid():
+    with pytest.raises(ValueError):
+        _norm_date("2026-13-99")
+    with pytest.raises(ValueError):
+        _norm_date("nope")
+
+
+def _candles_body(candles):
+    return {"result": {"candles": candles, "nextBefore": None}}
+
+
+def test_daily_quote_exact_with_change(monkeypatch):
+    c = _make_client(monkeypatch)
+    body = _candles_body([
+        {"timestamp": "2026-06-17T00:00:00.000+09:00", "openPrice": "339500",
+         "highPrice": "348000", "lowPrice": "331000", "closePrice": "343000",
+         "volume": "35704177", "currency": "KRW"},
+        {"timestamp": "2026-06-16T00:00:00.000+09:00", "openPrice": "330000",
+         "highPrice": "335000", "lowPrice": "320000", "closePrice": "330000",
+         "volume": "1000", "currency": "KRW"},
+    ])
+    c._session.request = MagicMock(return_value=_resp(200, body))
+    out = c.get_daily_quote("005930", "20260617")
+    # before 커서가 요청일 23:59:59(KST) 로 구성되는지 확인
+    _, kwargs = c._session.request.call_args
+    assert kwargs["params"]["before"] == "2026-06-17T23:59:59.999+09:00"
+    assert kwargs["params"]["interval"] == "1d"
+    assert out["exactDate"] is True
+    assert out["tradingDate"] == "2026-06-17"
+    assert out["close"] == "343000"
+    assert out["previousClose"] == "330000"
+    assert out["change"] == "13000"
+    assert out["changeRate"] == "3.94"
+
+
+def test_daily_quote_holiday_fallback(monkeypatch):
+    c = _make_client(monkeypatch)
+    body = _candles_body([
+        {"timestamp": "2026-06-19T00:00:00.000+09:00", "openPrice": "380000",
+         "highPrice": "380000", "lowPrice": "346000", "closePrice": "350500",
+         "volume": "77053712", "currency": "KRW"},
+        {"timestamp": "2026-06-18T00:00:00.000+09:00", "openPrice": "346000",
+         "highPrice": "364000", "lowPrice": "341500", "closePrice": "363500",
+         "volume": "59080574", "currency": "KRW"},
+    ])
+    c._session.request = MagicMock(return_value=_resp(200, body))
+    out = c.get_daily_quote("005930", "2026-06-21")  # 일요일
+    assert out["exactDate"] is False
+    assert out["requestedDate"] == "2026-06-21"
+    assert out["tradingDate"] == "2026-06-19"
+
+
+def test_daily_quote_no_candles(monkeypatch):
+    c = _make_client(monkeypatch)
+    c._session.request = MagicMock(return_value=_resp(200, _candles_body([])))
+    out = c.get_daily_quote("AAPL", "2026-06-17")
+    assert out["found"] is False
+    assert out["exactDate"] is False

@@ -112,6 +112,20 @@ def get_candles(symbol: str, interval: str = "1d", count: Optional[int] = None) 
     return _safe(client().get_candles, symbol, interval=interval, count=count)
 
 
+@mcp.tool()
+def get_daily_quote(symbol: str, date: str) -> Any:
+    """**특정 날짜의 주식 정보(일봉)** 조회. 티커와 날짜를 주면 그 날의
+    시가/고가/저가/종가/거래량과 직전 거래일 대비 등락을 반환합니다.
+
+    사용 예: 입력이 '005930 2026-06-17' 이면 symbol='005930', date='2026-06-17'.
+    심볼 형식: 국내는 6자리 코드('005930'), 미국은 순수 티커 대문자('AAPL','TSLA').
+    회사명·거래소 표기('Apple','AAPL.US')는 쓰지 마세요. 미국 주식도 거부하지 말고
+    이 도구로 직접 조회하세요. date 는 'YYYY-MM-DD'(또는 'YYYYMMDD').
+    요청 날짜가 휴장일이면 직전 거래일 캔들을 돌려주며 응답의 exactDate=false 로
+    표시됩니다(tradingDate 로 실제 거래일 확인)."""
+    return _safe(client().get_daily_quote, symbol, date)
+
+
 # =========================================================================== #
 # Stock / Market Info (read-only)
 # =========================================================================== #

@@ -88,6 +88,27 @@ def _norm_symbols(symbols: Union[str, list[str]]) -> str:
     return ",".join(_norm_symbol(s) for s in symbols.split(","))
 
 
+def _norm_date(date: str) -> str:
+    """날짜 문자열을 'YYYY-MM-DD' 로 정규화.
+
+    'YYYY-MM-DD' / 'YYYYMMDD' / 'YYYY/MM/DD' / 'YYYY.MM.DD' 를 허용하고,
+    날짜 뒤에 시각이 붙어 있어도(예: 'YYYY-MM-DDThh...') 날짜 부분만 취한다.
+    유효하지 않으면 ValueError.
+    """
+    from datetime import datetime
+
+    s = str(date).strip()
+    # 'YYYY-MM-DDThh:mm...' 또는 'YYYY-MM-DD hh:mm' 형태면 날짜 부분만 사용
+    s = s.replace("T", " ").split(" ", 1)[0]
+    s = s.replace("/", "-").replace(".", "-")
+    for fmt in ("%Y-%m-%d", "%Y%m%d"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    raise ValueError(f"날짜 형식이 올바르지 않습니다(YYYY-MM-DD): {date!r}")
+
+
 # --------------------------------------------------------------------------- #
 # 예외
 # --------------------------------------------------------------------------- #
@@ -353,6 +374,66 @@ class TossInvestClient:
             },
             **kw,
         )
+
+    def get_daily_quote(
+        self,
+        symbol: str,
+        date: str,
+        adjusted: Optional[bool] = None,
+        **kw: Any,
+    ) -> dict:
+        """특정 날짜의 일봉(시/고/저/종/거래량)을 조회한다.
+
+        date: 'YYYY-MM-DD'(또는 'YYYYMMDD'). 토스 candles API 는 날짜 직접
+        조회가 없어, 해당 날짜를 포함하는 ``before`` 커서로 1일봉을 가져온다.
+        모든 일봉 timestamp 는 KST(+09:00) 기준이고 날짜 라벨이 거래일과
+        일치하므로(국내·미국 공통), 요청 날짜가 휴장일이면 그 이전 가장 가까운
+        거래일의 캔들이 반환되며 ``exactDate=False`` 로 표시한다.
+
+        반환: symbol/requestedDate/tradingDate/exactDate/open/high/low/close/
+        volume/currency 와 (직전 거래일 대비) previousClose/change/changeRate.
+        """
+        norm = _norm_symbol(symbol)
+        day = _norm_date(date)
+        # before 는 inclusive 커서이며 전체 ISO 타임스탬프(KST)를 요구한다.
+        before = f"{day}T23:59:59.999+09:00"
+        # count=2 → 요청일 캔들 + 직전 거래일 캔들(등락 계산용).
+        res = self.get_candles(
+            norm, interval="1d", count=2, before=before, adjusted=adjusted, **kw
+        )
+        candles = res.get("candles", []) if isinstance(res, dict) else []
+        if not candles:
+            return {"symbol": norm, "requestedDate": day, "exactDate": False, "found": False}
+
+        latest = candles[0]
+        trading_date = str(latest.get("timestamp", ""))[:10]
+        out: dict[str, Any] = {
+            "symbol": norm,
+            "requestedDate": day,
+            "tradingDate": trading_date,
+            "exactDate": trading_date == day,
+            "found": True,
+            "open": latest.get("openPrice"),
+            "high": latest.get("highPrice"),
+            "low": latest.get("lowPrice"),
+            "close": latest.get("closePrice"),
+            "volume": latest.get("volume"),
+            "currency": latest.get("currency"),
+        }
+        # 직전 거래일 종가 대비 등락(가능할 때만)
+        if len(candles) > 1:
+            prev_close = candles[1].get("closePrice")
+            out["previousClose"] = prev_close
+            try:
+                close = Decimal(str(latest.get("closePrice")))
+                prev = Decimal(str(prev_close))
+                out["change"] = format(close - prev, "f")
+                if prev != 0:
+                    rate = (close - prev) / prev * Decimal(100)
+                    out["changeRate"] = format(rate.quantize(Decimal("0.01")), "f")
+            except (InvalidOperation, ValueError, TypeError):
+                pass
+        return out
 
     # ================================================================== #
     # Stock Info

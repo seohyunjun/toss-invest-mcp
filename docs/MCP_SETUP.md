@@ -74,9 +74,13 @@ claude mcp remove toss-invest
 ## 6. 노출되는 도구
 
 조회(항상): `get_prices`, `get_orderbook`, `get_trades`, `get_price_limits`,
-`get_candles`, `get_stocks`, `get_warnings`, `get_exchange_rate`,
+`get_candles`, `get_daily_quote`, `get_stocks`, `get_warnings`, `get_exchange_rate`,
 `get_market_calendar`, `get_accounts`, `get_holdings`, `get_buying_power`,
-`get_sellable_quantity`, `get_commissions`, `get_orders`, `get_order` (16개)
+`get_sellable_quantity`, `get_commissions`, `get_orders`, `get_order` (17개)
+
+> `get_daily_quote(symbol, date)` — 티커와 날짜('005930 2026-06-17')를 주면
+> 그 날의 시/고/저/종가·거래량과 직전 거래일 대비 등락을 반환. 휴장일이면
+> 직전 거래일로 폴백(`exactDate=false`, 실제 거래일은 `tradingDate`).
 
 거래(TOSS_ENABLE_TRADING=true 일 때만): `place_order`, `modify_order`,
 `cancel_order` (+3개)
